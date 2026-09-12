@@ -21,14 +21,38 @@ curl -fL --retry 3 --retry-delay 1 "$PATCHED/boxedwine-shell.js" -o "$RUNTIME/bo
 
 curl -fL --retry 3 --retry-delay 1 "$BASE_FS" -o "$WEB_TMP/base.zip"
 curl -fL --retry 3 --retry-delay 1 "$WEB_RELEASE" -o "$WEB_TMP/Boxedwine26R1Web.zip"
+
 python3 - <<'PY'
+from pathlib import Path
+import stat
 import zipfile
 
-with zipfile.ZipFile('.boxedwine-web/base.zip') as z:
-    z.extractall('.boxedwine-web/root')
 
-with zipfile.ZipFile('.boxedwine-web/Boxedwine26R1Web.zip') as z:
-    z.extractall('.boxedwine-web/unpacked')
+def extract_zip(zip_path, destination):
+    destination = Path(destination).resolve()
+    with zipfile.ZipFile(zip_path) as archive:
+        for info in archive.infolist():
+            relative = Path(info.filename)
+            target = (destination / relative).resolve()
+            if target != destination and destination not in target.parents:
+                raise RuntimeError(f"Unsafe zip path: {info.filename}")
+
+            mode = info.external_attr >> 16
+            if stat.S_ISLNK(mode):
+                target.parent.mkdir(parents=True, exist_ok=True)
+                if target.exists() or target.is_symlink():
+                    target.unlink()
+                target.symlink_to(archive.read(info).decode())
+            elif info.is_dir():
+                target.mkdir(parents=True, exist_ok=True)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with archive.open(info) as source, target.open("wb") as destination_file:
+                    destination_file.write(source.read())
+
+
+extract_zip(".boxedwine-web/base.zip", ".boxedwine-web/root")
+extract_zip(".boxedwine-web/Boxedwine26R1Web.zip", ".boxedwine-web/unpacked")
 PY
 
 WINE_ZIP=$(find "$WEB_TMP/unpacked" -type f -name '*.zip' -print0 | while IFS= read -r -d '' file; do
@@ -45,10 +69,32 @@ fi
 
 python3 - "$WINE_ZIP" <<'PY'
 import sys
+from pathlib import Path
+import stat
 import zipfile
 
-with zipfile.ZipFile(sys.argv[1]) as z:
-    z.extractall('.boxedwine-web/root')
+zip_path = Path(sys.argv[1])
+destination = Path(".boxedwine-web/root").resolve()
+
+with zipfile.ZipFile(zip_path) as archive:
+    for info in archive.infolist():
+        relative = Path(info.filename)
+        target = (destination / relative).resolve()
+        if target != destination and destination not in target.parents:
+            raise RuntimeError(f"Unsafe zip path: {info.filename}")
+
+        mode = info.external_attr >> 16
+        if stat.S_ISLNK(mode):
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.exists() or target.is_symlink():
+                target.unlink()
+            target.symlink_to(archive.read(info).decode())
+        elif info.is_dir():
+            target.mkdir(parents=True, exist_ok=True)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with archive.open(info) as source, target.open("wb") as destination_file:
+                destination_file.write(source.read())
 PY
 
 if ! test -f "$WEB_TMP/root/bin/wine" && ! test -f "$WEB_TMP/root/opt/wine/bin/wine"; then
@@ -56,12 +102,16 @@ if ! test -f "$WEB_TMP/root/bin/wine" && ! test -f "$WEB_TMP/root/opt/wine/bin/w
   exit 1
 fi
 
-if ! test -f "$WEB_TMP/root/lib/libpthread.so.0"; then
+if ! test -e "$WEB_TMP/root/lib/libpthread.so.0"; then
   echo "Boxedwine root filesystem is missing /lib/libpthread.so.0"
   exit 1
 fi
 
-(cd "$WEB_TMP/root" && zip -qr "../../$OUT/boxedwine.zip" .)
+if test -L "$WEB_TMP/root/lib/libpthread.so.0"; then
+  echo "Verified /lib/libpthread.so.0 is a symlink"
+fi
+
+(cd "$WEB_TMP/root" && zip -qyr "../../$OUT/boxedwine.zip" .)
 
 cp index.html style.css app.js runner.html runner.js "$OUT/"
 rm -rf "$WEB_TMP"
