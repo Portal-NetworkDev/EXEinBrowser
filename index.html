@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>WebEXE</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main class="app">
+        <section class="hero">
+            <h1>WebEXE</h1>
+            <p>Run Windows programs in your browser.</p>
+        </section>
+
+        <section class="runner">
+            <label class="drop" id="drop">
+                <input id="file" type="file" accept=".exe,application/x-msdownload">
+                <strong id="file-name">Choose an EXE</strong>
+                <span>Files stay in your browser until you start the runner.</span>
+            </label>
+
+            <button id="run" disabled>Run</button>
+
+            <div id="status" class="status" aria-live="polite"></div>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
