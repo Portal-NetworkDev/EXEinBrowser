@@ -86,7 +86,7 @@ run.addEventListener('click', async () => {
   }
 
   run.disabled = true;
-  status.textContent = 'Preparing the Windows program...';
+  status.textContent = 'Preparing the EXE...';
 
   try {
     await storeFile(selected);
