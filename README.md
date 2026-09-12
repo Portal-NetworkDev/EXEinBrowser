@@ -1,4 +1,4 @@
-![Coffie](./images/Coffie.png)
+<img src="./images/Coffie.png" alt="Coffie" width="100">
 
 # EXEinBrowser
 
