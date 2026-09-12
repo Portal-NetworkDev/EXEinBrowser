@@ -39,10 +39,14 @@ def extract_zip(zip_path, destination):
 
             mode = info.external_attr >> 16
             if stat.S_ISLNK(mode):
+                link_target = Path(archive.read(info).decode())
+                source = (target.parent / link_target).resolve()
+                if not source.exists():
+                    raise RuntimeError(f"Broken symlink in archive: {info.filename} -> {link_target}")
                 target.parent.mkdir(parents=True, exist_ok=True)
                 if target.exists() or target.is_symlink():
                     target.unlink()
-                target.symlink_to(archive.read(info).decode())
+                target.write_bytes(source.read_bytes())
             elif info.is_dir():
                 target.mkdir(parents=True, exist_ok=True)
             else:
@@ -85,10 +89,14 @@ with zipfile.ZipFile(zip_path) as archive:
 
         mode = info.external_attr >> 16
         if stat.S_ISLNK(mode):
+            link_target = Path(archive.read(info).decode())
+            source = (target.parent / link_target).resolve()
+            if not source.exists():
+                raise RuntimeError(f"Broken symlink in archive: {info.filename} -> {link_target}")
             target.parent.mkdir(parents=True, exist_ok=True)
             if target.exists() or target.is_symlink():
                 target.unlink()
-            target.symlink_to(archive.read(info).decode())
+            target.write_bytes(source.read_bytes())
         elif info.is_dir():
             target.mkdir(parents=True, exist_ok=True)
         else:
@@ -102,16 +110,17 @@ if ! test -f "$WEB_TMP/root/bin/wine" && ! test -f "$WEB_TMP/root/opt/wine/bin/w
   exit 1
 fi
 
-if ! test -e "$WEB_TMP/root/lib/libpthread.so.0"; then
+if ! test -f "$WEB_TMP/root/lib/libpthread.so.0"; then
   echo "Boxedwine root filesystem is missing /lib/libpthread.so.0"
   exit 1
 fi
 
 if test -L "$WEB_TMP/root/lib/libpthread.so.0"; then
-  echo "Verified /lib/libpthread.so.0 is a symlink"
+  echo "Boxedwine root filesystem still has a symlink for /lib/libpthread.so.0"
+  exit 1
 fi
 
-(cd "$WEB_TMP/root" && zip -qyr "../../$OUT/boxedwine.zip" .)
+(cd "$WEB_TMP/root" && zip -qr "../../$OUT/boxedwine.zip" .)
 
 cp index.html style.css app.js runner.html runner.js "$OUT/"
 rm -rf "$WEB_TMP"
